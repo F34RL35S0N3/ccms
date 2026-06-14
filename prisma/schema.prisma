@@ -1,0 +1,377 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String?
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  role          UserRole  @default(MEMBER)
+  nim           String?
+  faculty       String?
+  skills        String[]  @default([])
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts      Account[]
+  sessions      Session[]
+  teamMembers   TeamMember[]
+  tasks         Task[]       @relation("TaskAssignee")
+  taskComments  TaskComment[]
+  activities    ActivityLog[]
+  notifications Notification[]
+  documents     Document[]
+  knowledgeBase KnowledgeBaseArticle[]
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Competition {
+  id          String           @id @default(cuid())
+  name        String
+  organizer   String
+  website     String?
+  level       CompetitionLevel
+  category    CompetitionCategory
+  description String?          @db.Text
+  prizePool   String?
+  certificate Boolean          @default(false)
+  funding     Boolean          @default(false)
+  incubation  Boolean          @default(false)
+  status      CompetitionStatus @default(MONITORING)
+  startDate   DateTime?        @map("start_date")
+  endDate     DateTime?        @map("end_date")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  stages      CompetitionStage[]
+  timeline    CompetitionTimeline[]
+  tasks       Task[]
+  deadlines   Deadline[]
+  documents   Document[]
+  teamMembers TeamMember[]
+  results     CompetitionResult?
+  activities  ActivityLog[]
+
+  @@map("competitions")
+}
+
+model CompetitionStage {
+  id            String   @id @default(cuid())
+  competitionId String   @map("competition_id")
+  name          String
+  order         Int
+  status        StageStatus @default(PENDING)
+  startDate     DateTime? @map("start_date")
+  endDate       DateTime? @map("end_date")
+  description   String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@map("competition_stages")
+}
+
+model CompetitionTimeline {
+  id            String   @id @default(cuid())
+  competitionId String   @map("competition_id")
+  title         String
+  date          DateTime
+  type          TimelineType
+  description   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@map("competition_timelines")
+}
+
+model TeamMember {
+  id            String     @id @default(cuid())
+  competitionId String     @map("competition_id")
+  userId        String     @map("user_id")
+  role          MemberRole @default(MEMBER)
+  joinedAt      DateTime   @default(now()) @map("joined_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId])
+  @@map("team_members")
+}
+
+model Task {
+  id            String     @id @default(cuid())
+  competitionId String     @map("competition_id")
+  title         String
+  description   String?    @db.Text
+  status        TaskStatus @default(BACKLOG)
+  priority      Priority   @default(MEDIUM)
+  assigneeId    String?    @map("assignee_id")
+  dueDate       DateTime?  @map("due_date")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  assignee    User?       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  comments    TaskComment[]
+
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("task_comments")
+}
+
+model Deadline {
+  id            String         @id @default(cuid())
+  competitionId String         @map("competition_id")
+  title         String
+  type          DeadlineType
+  date          DateTime
+  description   String?
+  reminderSent  Boolean        @default(false) @map("reminder_sent")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@map("deadlines")
+}
+
+model Document {
+  id            String       @id @default(cuid())
+  competitionId String?      @map("competition_id")
+  uploadedBy    String       @map("uploaded_by")
+  name          String
+  type          DocumentType
+  url           String
+  size          Int?
+  version       Int          @default(1)
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  competition Competition? @relation(fields: [competitionId], references: [id], onDelete: SetNull)
+  user        User         @relation(fields: [uploadedBy], references: [id])
+
+  @@map("documents")
+}
+
+model CompetitionResult {
+  id            String   @id @default(cuid())
+  competitionId String   @unique @map("competition_id")
+  placement     String?
+  score         Float?
+  feedback      String?  @db.Text
+  certificateUrl String? @map("certificate_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@map("competition_results")
+}
+
+model KnowledgeBaseArticle {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  category    KBCategory
+  tags        String[] @default([])
+  authorId    String   @map("author_id")
+  isTemplate  Boolean  @default(false) @map("is_template")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@map("knowledge_base_articles")
+}
+
+model ActivityLog {
+  id            String       @id @default(cuid())
+  userId        String       @map("user_id")
+  competitionId String?      @map("competition_id")
+  action        String
+  details       String?
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  user        User         @relation(fields: [userId], references: [id])
+  competition Competition? @relation(fields: [competitionId], references: [id])
+
+  @@map("activity_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  type      NotificationType
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum UserRole {
+  ADMIN
+  TEAM_LEADER
+  MEMBER
+}
+
+enum CompetitionLevel {
+  REGIONAL
+  NATIONAL
+  INTERNATIONAL
+}
+
+enum CompetitionCategory {
+  HACKATHON
+  CTF
+  RESEARCH
+  PAPER_COMPETITION
+  INNOVATION_COMPETITION
+  BUSINESS_CASE
+  TECHNOLOGY_COMPETITION
+}
+
+enum CompetitionStatus {
+  MONITORING
+  REGISTRATION
+  SELECTION_PROPOSAL
+  SEMIFINAL
+  FINAL
+  FINISHED
+  WON
+  ELIMINATED
+}
+
+enum StageStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+enum TimelineType {
+  DEADLINE
+  MEETING
+  PRESENTATION
+  SUBMISSION
+  MILESTONE
+  OTHER
+}
+
+enum MemberRole {
+  LEADER
+  CO_LEADER
+  MEMBER
+  MENTOR
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DeadlineType {
+  REGISTRATION
+  PROPOSAL
+  SUBMISSION
+  PRESENTATION
+  FINAL_ROUND
+  OTHER
+}
+
+enum DocumentType {
+  PROPOSAL
+  PAPER
+  PPT
+  SOURCE_CODE
+  DATASET
+  REFERENCES
+  OTHER
+}
+
+enum KBCategory {
+  TIPS
+  STRATEGY
+  TEMPLATE
+  LESSONS_LEARNED
+  EVALUATION
+  GENERAL
+}
+
+enum NotificationType {
+  DEADLINE
+  TASK
+  COMPETITION
+  SYSTEM
+  MENTION
+}
