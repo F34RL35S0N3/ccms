@@ -5,6 +5,9 @@ import bcrypt from "bcryptjs"
 import { mockUsers } from "@/lib/mock-data"
 
 export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
+  // trustHost wajib untuk Vercel & deployment production
+  trustHost: true,
+
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -29,7 +32,12 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
           if (user && (user as any).password) {
             const isPasswordMatch = await bcrypt.compare(password, (user as any).password);
             if (isPasswordMatch) {
-              return user;
+              return {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: (user as any).role,
+              } as any;
             }
             // User found in DB but password wrong — don't fall through to mock
             return null;
@@ -56,9 +64,11 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
   ],
   pages: {
     signIn: "/login",
+    error: "/login",  // redirect error ke halaman login, bukan /api/auth/error
   },
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 hari
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -75,6 +85,7 @@ export const { handlers: { GET, POST }, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;
+        (session.user as any).role = token.role;
       }
       return session;
     }
