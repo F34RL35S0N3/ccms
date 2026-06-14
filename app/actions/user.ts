@@ -50,7 +50,7 @@ export async function createUser(data: CreateUserInput) {
         nim: data.nim || null,
         faculty: data.faculty || null,
         skills: data.skills,
-      },
+      } as any,
     });
 
     revalidatePath("/team");

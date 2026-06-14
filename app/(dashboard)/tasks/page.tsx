@@ -361,8 +361,8 @@ export default function TasksPage() {
                         competitions={competitions}
                         onToggle={() => handleToggleDone(task.id)}
                         onDelete={() => handleDeleteTask(task.id)}
-                        onEdit={(updated) => handleEditTask(updated)}
-                        onMove={(status) => handleMoveStatus(task.id, status)}
+                        onEdit={(updated: any) => handleEditTask(updated)}
+                        onMove={(status: any) => handleMoveStatus(task.id, status)}
                       />
                     ))}
                   </AnimatePresence>

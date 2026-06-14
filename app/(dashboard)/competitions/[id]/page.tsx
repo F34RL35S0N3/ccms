@@ -108,11 +108,11 @@ export default function CompetitionDetailPage() {
     );
   }
 
-  const completedStages = competition.stages.filter((s) => s.status === "COMPLETED").length;
+  const completedStages = competition.stages.filter((s: any) => s.status === "COMPLETED").length;
   const progress = competition.stages.length > 0
     ? Math.round((completedStages / competition.stages.length) * 100)
     : 0;
-  const currentStage = competition.stages.find((s) => s.status === "IN_PROGRESS");
+  const currentStage = competition.stages.find((s: any) => s.status === "IN_PROGRESS");
 
   // --- Stage handlers ---
   const handleStageCheck = (stageId: string) => {
@@ -361,10 +361,10 @@ export default function CompetitionDetailPage() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Upcoming Deadlines</p>
                   {competition.deadlines
-                    .filter((d) => getDaysRemaining(d.date) >= -1)
-                    .sort((a, b) => a.date.getTime() - b.date.getTime())
+                    .filter((d: any) => getDaysRemaining(d.date) >= -1)
+                    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
                     .slice(0, 3)
-                    .map((dl) => (
+                    .map((dl: any) => (
                       <div key={dl.id} className="flex items-center justify-between text-sm py-1.5 px-2 rounded-lg bg-muted/50">
                         <span className="truncate pr-2">{dl.title}</span>
                         <span className={cn("text-xs shrink-0", getDeadlineColor(getDaysRemaining(dl.date)))}>
@@ -410,7 +410,7 @@ export default function CompetitionDetailPage() {
                 <div className="relative">
                   <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-border" />
                   <div className="space-y-0">
-                    {competition.stages.map((stage, idx) => {
+                    {competition.stages.map((stage: any, idx: number) => {
                       const isCompleted = stage.status === "COMPLETED";
                       const isCurrent = stage.status === "IN_PROGRESS";
                       const isPending = stage.status === "PENDING";
@@ -517,7 +517,7 @@ export default function CompetitionDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {competition.tasks.map((task, idx) => (
+                {competition.tasks.map((task: any, idx: number) => (
                   <motion.div
                     key={task.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -587,7 +587,7 @@ export default function CompetitionDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {competition.teamMembers.map((member, idx) => (
+                {competition.teamMembers.map((member: any, idx: number) => (
                   <motion.div
                     key={member.id}
                     initial={{ opacity: 0, scale: 0.95 }}
@@ -604,7 +604,7 @@ export default function CompetitionDetailPage() {
                       <p className="font-medium">{member.user.name}</p>
                       <p className="text-xs text-muted-foreground">{member.user.email}</p>
                       <div className="flex gap-1 mt-1">
-                        {member.user.skills?.slice(0, 3).map((skill) => (
+                        {member.user.skills?.slice(0, 3).map((skill: string) => (
                           <Badge key={skill} variant="outline" className="text-[10px]">{skill}</Badge>
                         ))}
                       </div>
@@ -641,7 +641,7 @@ export default function CompetitionDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {competition.documents.map((doc, idx) => (
+                {competition.documents.map((doc: any, idx: number) => (
                   <motion.div
                     key={doc.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -691,7 +691,7 @@ export default function CompetitionDetailPage() {
                 onAdd={(newTimeline) => {
                   const updated = {
                     ...competition,
-                    timeline: [...competition.timeline, newTimeline].sort((a, b) => a.date.getTime() - b.date.getTime()),
+                    timeline: [...competition.timeline, newTimeline].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()),
                   };
                   const idx = mockCompetitions.findIndex((c) => c.id === updated.id);
                   if (idx !== -1) mockCompetitions[idx] = updated;
@@ -709,7 +709,7 @@ export default function CompetitionDetailPage() {
                 <div className="relative">
                   <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-border" />
                   <div className="space-y-0">
-                    {competition.timeline.map((item, idx) => (
+                    {competition.timeline.map((item: any, idx: number) => (
                       <motion.div
                         key={item.id}
                         initial={{ opacity: 0, x: -20 }}
