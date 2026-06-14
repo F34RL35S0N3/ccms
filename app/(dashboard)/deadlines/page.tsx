@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { usePersistedCompetitions } from "@/hooks/use-persisted-competitions";
+import { useCompetitions } from "@/hooks/use-competitions";
 import { AddDeadlineDialog } from "@/components/deadlines/add-deadline-dialog";
 import {
   getDaysRemaining,
@@ -43,7 +43,7 @@ function persistDeadlineUpdate(competitionId: string, deadlines: any[]) {
 }
 
 export default function DeadlinesPage() {
-  const { competitions, loaded } = usePersistedCompetitions();
+  const { competitions, loaded } = useCompetitions();
   const [filter, setFilter] = useState<"all" | "urgent" | "upcoming" | "passed">("all");
   const [search, setSearch] = useState("");
 
@@ -64,32 +64,30 @@ export default function DeadlinesPage() {
     setDeadlines(allDeadlines);
   }, [allDeadlines]);
 
-  const handleAdd = (newDeadline: any) => {
-    // Persist to localStorage
-    const compIndex = competitions.findIndex((c) => c.id === newDeadline.competitionId);
-    if (compIndex !== -1) {
-      const existingDeadlines = competitions[compIndex].deadlines || [];
-      persistDeadlineUpdate(newDeadline.competitionId, [newDeadline, ...existingDeadlines]);
+  const handleAdd = async (newDeadline: any) => {
+    try {
+      await api.competitions.deadlines.create(newDeadline.competitionId, newDeadline);
+      setDeadlines((prev) =>
+        [...prev, {
+          ...newDeadline,
+          date: new Date(newDeadline.date),
+          competition: { id: newDeadline.competitionId, name: newDeadline.competition?.name || "" },
+        }].sort((a, b) => a.date.getTime() - b.date.getTime())
+      );
+      toast.success("Deadline berhasil ditambahkan!");
+    } catch (error) {
+      toast.error("Gagal menambahkan deadline");
     }
-    setDeadlines((prev) =>
-      [...prev, {
-        ...newDeadline,
-        date: new Date(newDeadline.date),
-        competition: { id: newDeadline.competitionId, name: newDeadline.competition?.name || "" },
-      }].sort((a, b) => a.date.getTime() - b.date.getTime())
-    );
-    toast.success("Deadline berhasil ditambahkan!");
   };
 
-  const handleDelete = (deadlineId: string, competitionId: string) => {
-    // Persist removal
-    const comp = competitions.find((c) => c.id === competitionId);
-    if (comp) {
-      const updated = (comp.deadlines || []).filter((d: any) => d.id !== deadlineId);
-      persistDeadlineUpdate(competitionId, updated);
+  const handleDelete = async (deadlineId: string, competitionId: string) => {
+    try {
+      await api.competitions.deadlines.delete(competitionId, deadlineId);
+      setDeadlines((prev) => prev.filter((d) => d.id !== deadlineId));
+      toast.success("Deadline dihapus.");
+    } catch (e) {
+      toast.error("Gagal menghapus deadline");
     }
-    setDeadlines((prev) => prev.filter((d) => d.id !== deadlineId));
-    toast.success("Deadline dihapus.");
   };
 
   const filtered = useMemo(() => {

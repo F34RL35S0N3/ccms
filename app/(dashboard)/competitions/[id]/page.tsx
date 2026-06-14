@@ -51,39 +51,39 @@ import {
   getDeadlineBadgeColor,
   formatDate,
 } from "@/lib/utils";
-import { usePersistedCompetitions } from "@/hooks/use-persisted-competitions";
-
-const STORAGE_KEY = "cygnus_competitions";
-
-/** Persist a single updated competition back to localStorage */
-function persistUpdate(updated: any) {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const list: any[] = JSON.parse(raw);
-    const idx = list.findIndex((c: any) => c.id === updated.id);
-    if (idx !== -1) list[idx] = updated;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  } catch {}
-}
+import { api } from "@/lib/api";
+import { useEffect, useCallback } from "react";
 
 export default function CompetitionDetailPage() {
   const params = useParams();
-  const { competitions, loaded } = usePersistedCompetitions();
-
-  // Find from persisted list (after localStorage loads)
-  const initialComp = competitions.find((c) => c.id === params.id);
   const [competition, setCompetition] = useState<any>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  // Sync competition from persisted list once loaded
-  const [synced, setSynced] = useState(false);
-  if (loaded && !synced && initialComp) {
-    setCompetition(initialComp);
-    setSynced(true);
-  }
+  const fetchCompetition = useCallback(async () => {
+    try {
+      const data = await api.competitions.get(params.id as string);
+      
+      // Parse ISO dates back to Date objects locally for rendering
+      const parsedData = JSON.parse(JSON.stringify(data), (key, value) => {
+        if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+          return new Date(value);
+        }
+        return value;
+      });
+
+      setCompetition(parsedData);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoaded(true);
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    fetchCompetition();
+  }, [fetchCompetition]);
 
   const updateComp = (updated: any) => {
-    persistUpdate(updated);
     setCompetition(updated);
   };
 
@@ -116,56 +116,60 @@ export default function CompetitionDetailPage() {
   const currentStage = competition.stages.find((s: any) => s.status === "IN_PROGRESS");
 
   // --- Stage handlers ---
-  const handleStageCheck = (stageId: string) => {
-    const updated = {
-      ...competition,
-      stages: competition.stages.map((s: any) =>
-        s.id === stageId
-          ? { ...s, status: s.status === "COMPLETED" ? "PENDING" : "COMPLETED" }
-          : s
-      ),
-    };
-    updateComp(updated);
-    toast.success("Status workflow diperbarui!");
+  const handleStageCheck = async (stageId: string) => {
+    const stage = competition.stages.find((s: any) => s.id === stageId);
+    if (!stage) return;
+    
+    try {
+      const newStatus = stage.status === "COMPLETED" ? "PENDING" : "COMPLETED";
+      await api.competitions.stages.update(competition.id, stageId, { ...stage, status: newStatus });
+      fetchCompetition();
+      toast.success("Status workflow diperbarui!");
+    } catch (e) {
+      toast.error("Gagal memperbarui status");
+    }
   };
 
-  const handleStageEdit = (updatedStage: any) => {
-    const updated = {
-      ...competition,
-      stages: competition.stages.map((s: any) => s.id === updatedStage.id ? updatedStage : s),
-    };
-    updateComp(updated);
-    toast.success("Workflow stage berhasil diperbarui!");
+  const handleStageEdit = async (updatedStage: any) => {
+    try {
+      await api.competitions.stages.update(competition.id, updatedStage.id, updatedStage);
+      fetchCompetition();
+      toast.success("Workflow stage berhasil diperbarui!");
+    } catch (e) {
+      toast.error("Gagal memperbarui stage");
+    }
   };
 
-  const handleStageDelete = (stageId: string) => {
-    const updated = {
-      ...competition,
-      stages: competition.stages.filter((s: any) => s.id !== stageId),
-    };
-    updateComp(updated);
-    toast.success("Stage dihapus.");
+  const handleStageDelete = async (stageId: string) => {
+    try {
+      await api.competitions.stages.delete(competition.id, stageId);
+      fetchCompetition();
+      toast.success("Stage dihapus.");
+    } catch (e) {
+      toast.error("Gagal menghapus stage");
+    }
   };
 
   // --- Timeline handlers ---
-  const handleTimelineEdit = (updatedItem: any) => {
-    const updated = {
-      ...competition,
-      timeline: competition.timeline
-        .map((t: any) => t.id === updatedItem.id ? updatedItem : t)
-        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-    };
-    updateComp(updated);
-    toast.success("Timeline berhasil diperbarui!");
+  // --- Timeline handlers ---
+  const handleTimelineEdit = async (updatedItem: any) => {
+    try {
+      await api.competitions.timeline.update(competition.id, updatedItem.id, updatedItem);
+      fetchCompetition();
+      toast.success("Timeline berhasil diperbarui!");
+    } catch (e) {
+      toast.error("Gagal memperbarui timeline");
+    }
   };
 
-  const handleTimelineDelete = (timelineId: string) => {
-    const updated = {
-      ...competition,
-      timeline: competition.timeline.filter((t: any) => t.id !== timelineId),
-    };
-    updateComp(updated);
-    toast.success("Timeline event dihapus.");
+  const handleTimelineDelete = async (timelineId: string) => {
+    try {
+      await api.competitions.timeline.delete(competition.id, timelineId);
+      fetchCompetition();
+      toast.success("Timeline event dihapus.");
+    } catch (e) {
+      toast.error("Gagal menghapus timeline");
+    }
   };
 
 
@@ -209,12 +213,26 @@ export default function CompetitionDetailPage() {
           <div className="flex gap-2">
             <EditCompetitionDialog
               competition={competition}
-              onSave={(updated) => updateComp(updated)}
+              onSave={async (updated) => {
+                try {
+                  await api.competitions.update(competition.id, updated);
+                  fetchCompetition();
+                  toast.success("Kompetisi diupdate!");
+                } catch (e) {
+                  toast.error("Gagal update kompetisi");
+                }
+              }}
             />
             <AddTaskDialog
               competitionId={competition.id}
-              onAdd={(newTask) => {
-                updateComp({ ...competition, tasks: [newTask, ...competition.tasks] });
+              onAdd={async (newTask) => {
+                try {
+                  await api.competitions.tasks.create(competition.id, newTask);
+                  fetchCompetition();
+                  toast.success("Task ditambahkan");
+                } catch (e) {
+                  toast.error("Gagal menambahkan task");
+                }
               }}
             />
           </div>
@@ -393,11 +411,14 @@ export default function CompetitionDetailPage() {
               </div>
               <AddStageDialog
                 nextOrder={competition.stages.length + 1}
-                onAdd={(newStage) => {
-                  const updated = { ...competition, stages: [...competition.stages, newStage] };
-                  const idx = mockCompetitions.findIndex((c) => c.id === updated.id);
-                  if (idx !== -1) mockCompetitions[idx] = updated;
-                  setCompetition(updated);
+                onAdd={async (newStage) => {
+                  try {
+                    await api.competitions.stages.create(competition.id, newStage);
+                    fetchCompetition();
+                    toast.success("Stage ditambahkan");
+                  } catch (e) {
+                    toast.error("Gagal menambahkan stage");
+                  }
                 }}
               />
             </CardHeader>
@@ -511,8 +532,14 @@ export default function CompetitionDetailPage() {
               </div>
               <AddTaskDialog
                 competitionId={competition.id}
-                onAdd={(newTask) => {
-                  updateComp({ ...competition, tasks: [newTask, ...competition.tasks] });
+                onAdd={async (newTask) => {
+                  try {
+                    await api.competitions.tasks.create(competition.id, newTask);
+                    fetchCompetition();
+                    toast.success("Task ditambahkan");
+                  } catch (e) {
+                    toast.error("Gagal menambahkan task");
+                  }
                 }}
               />
             </CardHeader>
@@ -526,12 +553,48 @@ export default function CompetitionDetailPage() {
                     transition={{ delay: idx * 0.05 }}
                     className="flex items-center gap-4 rounded-lg border p-4 hover:bg-accent/50 transition-colors"
                   >
-                    <div className={cn(
-                      "h-5 w-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors",
-                      task.status === "DONE" ? "bg-emerald-500 border-emerald-500" : "border-muted-foreground/30"
-                    )}>
-                      {task.status === "DONE" && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <div className={cn(
+                          "h-5 w-5 rounded border-2 flex items-center justify-center cursor-pointer transition-colors",
+                          task.status === "DONE" ? "bg-emerald-500 border-emerald-500" : "border-muted-foreground/30"
+                        )}>
+                          {task.status === "DONE" && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                        </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuCheckboxItem
+                          checked={task.status === "DONE"}
+                          onCheckedChange={async () => {
+                            try {
+                              await api.competitions.tasks.update(competition.id, task.id, {
+                                ...task,
+                                status: task.status === "DONE" ? "IN_PROGRESS" : "DONE"
+                              });
+                              fetchCompetition();
+                            } catch (e) {
+                              toast.error("Gagal update task");
+                            }
+                          }}
+                        >
+                          {task.status === "DONE" ? "Tandai belum selesai" : "Tandai selesai"}
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuItem 
+                          className="text-destructive"
+                          onClick={async () => {
+                            try {
+                              await api.competitions.tasks.delete(competition.id, task.id);
+                              fetchCompetition();
+                              toast.success("Task dihapus");
+                            } catch (e) {
+                              toast.error("Gagal hapus task");
+                            }
+                          }}
+                        >
+                          Hapus Task
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <div className="flex-1 min-w-0">
                       <p className={cn("text-sm font-medium", task.status === "DONE" && "line-through text-muted-foreground")}>
                         {task.title}
@@ -581,8 +644,14 @@ export default function CompetitionDetailPage() {
               </div>
               <AddMemberDialog
                 existingMemberIds={competition.teamMembers.map((tm: any) => tm.userId)}
-                onAdd={(newMember) => {
-                  updateComp({ ...competition, teamMembers: [...competition.teamMembers, newMember] });
+                onAdd={async (newMember) => {
+                  try {
+                    await api.competitions.members.create(competition.id, newMember);
+                    fetchCompetition();
+                    toast.success("Anggota ditambahkan");
+                  } catch (e) {
+                    toast.error("Gagal menambahkan anggota");
+                  }
                 }}
               />
             </CardHeader>
@@ -635,8 +704,14 @@ export default function CompetitionDetailPage() {
               </div>
               <AddDocumentDialog
                 competitionId={competition.id}
-                onAdd={(newDoc) => {
-                  updateComp({ ...competition, documents: [newDoc, ...competition.documents] });
+                onAdd={async (newDoc) => {
+                  try {
+                    await api.competitions.documents.create(competition.id, newDoc);
+                    fetchCompetition();
+                    toast.success("Dokumen ditambahkan");
+                  } catch (e) {
+                    toast.error("Gagal menambahkan dokumen");
+                  }
                 }}
               />
             </CardHeader>
@@ -689,14 +764,14 @@ export default function CompetitionDetailPage() {
                 <CardDescription>Jadwal dan milestone kompetisi</CardDescription>
               </div>
               <AddTimelineDialog
-                onAdd={(newTimeline) => {
-                  const updated = {
-                    ...competition,
-                    timeline: [...competition.timeline, newTimeline].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-                  };
-                  const idx = mockCompetitions.findIndex((c) => c.id === updated.id);
-                  if (idx !== -1) mockCompetitions[idx] = updated;
-                  setCompetition(updated);
+                onAdd={async (newEvent) => {
+                  try {
+                    await api.competitions.timeline.create(competition.id, newEvent);
+                    fetchCompetition();
+                    toast.success("Timeline ditambahkan");
+                  } catch (e) {
+                    toast.error("Gagal menambahkan timeline");
+                  }
                 }}
               />
             </CardHeader>

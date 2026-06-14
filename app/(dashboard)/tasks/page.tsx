@@ -42,18 +42,8 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { usePersistedCompetitions } from "@/hooks/use-persisted-competitions";
-import { mockUsers } from "@/lib/mock-data";
-import {
-  getStatusColor,
-  getInitials,
-  getDaysRemaining,
-  getDeadlineColor,
-  formatDate,
-} from "@/lib/utils";
-import { toast } from "sonner";
-
-const STORAGE_KEY = "cygnus_competitions";
+import { useCompetitions } from "@/hooks/use-competitions";
+import { api } from "@/lib/api";
 
 const columns = [
   { id: "BACKLOG", label: "Backlog", color: "border-slate-500/30", dot: "bg-slate-500", textColor: "text-slate-400" },
@@ -71,59 +61,39 @@ const priorityColors: Record<string, string> = {
   CRITICAL: "text-red-400 bg-red-500/10",
 };
 
-function persistTasks(competitionId: string, tasks: any[]) {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const list: any[] = JSON.parse(raw);
-    const idx = list.findIndex((c: any) => c.id === competitionId);
-    if (idx !== -1) list[idx].tasks = tasks;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  } catch {}
-}
+// Remove persistTasks
 
 export default function TasksPage() {
-  const { competitions, loaded } = usePersistedCompetitions();
+  const { competitions, loaded: compsLoaded } = useCompetitions();
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [filterPriority, setFilterPriority] = useState("ALL");
   const [filterComp, setFilterComp] = useState("ALL");
 
-  // All tasks derived from persisted competitions
   const [allTasks, setAllTasks] = useState<any[]>([]);
+  const [tasksLoaded, setTasksLoaded] = useState(false);
+
+  const fetchTasks = async () => {
+    try {
+      const data = await api.tasks.list();
+      const formatted = data.map(t => ({
+        ...t,
+        competitionName: t.competition?.name || "Unknown",
+        competitionId: t.competitionId,
+        dueDate: t.dueDate ? new Date(t.dueDate) : null,
+      }));
+      setAllTasks(formatted);
+    } catch (error) {
+      toast.error("Gagal memuat tasks");
+    } finally {
+      setTasksLoaded(true);
+    }
+  };
 
   useEffect(() => {
-    if (loaded) {
-      const tasks = competitions.flatMap((comp) =>
-        (comp.tasks || []).map((t: any) => ({
-          ...t,
-          competitionName: comp.name,
-          competitionId: comp.id,
-          dueDate: t.dueDate ? new Date(t.dueDate) : null,
-        }))
-      );
-      setAllTasks(tasks);
-    }
-  }, [loaded, competitions]);
-
-  // Sync allTasks back to localStorage when changed
-  const syncToStorage = (updatedTasks: any[]) => {
-    setAllTasks(updatedTasks);
-    // Group by competition and persist
-    const byComp: Record<string, any[]> = {};
-    updatedTasks.forEach((t) => {
-      if (!byComp[t.competitionId]) byComp[t.competitionId] = [];
-      byComp[t.competitionId].push(t);
-    });
-    Object.entries(byComp).forEach(([compId, tasks]) => {
-      persistTasks(compId, tasks);
-    });
-    // Also persist competitions with empty tasks
-    competitions.forEach((comp) => {
-      if (!byComp[comp.id]) persistTasks(comp.id, []);
-    });
-  };
+    fetchTasks();
+  }, []);
 
   const filteredTasks = useMemo(() => {
     return allTasks.filter((task) => {
@@ -146,42 +116,53 @@ export default function TasksPage() {
     done: allTasks.filter((t) => t.status === "DONE").length,
   };
 
-  const handleAddTask = (newTask: any) => {
-    const updated = [newTask, ...allTasks];
-    syncToStorage(updated);
-    toast.success("Task berhasil ditambahkan!");
+  const handleAddTask = async (newTask: any) => {
+    try {
+      await api.competitions.tasks.create(newTask.competitionId, newTask);
+      fetchTasks();
+      toast.success("Task berhasil ditambahkan!");
+    } catch (e) { toast.error("Gagal menambahkan task"); }
   };
 
-  const handleEditTask = (updatedTask: any) => {
-    const updated = allTasks.map((t) => (t.id === updatedTask.id ? updatedTask : t));
-    syncToStorage(updated);
-    toast.success("Task berhasil diperbarui!");
+  const handleEditTask = async (updatedTask: any) => {
+    try {
+      await api.competitions.tasks.update(updatedTask.competitionId, updatedTask.id, updatedTask);
+      fetchTasks();
+      toast.success("Task berhasil diperbarui!");
+    } catch (e) { toast.error("Gagal mengupdate task"); }
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    const updated = allTasks.filter((t) => t.id !== taskId);
-    syncToStorage(updated);
-    toast.success("Task dihapus.");
+  const handleDeleteTask = async (taskId: string) => {
+    const task = allTasks.find(t => t.id === taskId);
+    if (!task) return;
+    try {
+      await api.competitions.tasks.delete(task.competitionId, task.id);
+      fetchTasks();
+      toast.success("Task dihapus.");
+    } catch (e) { toast.error("Gagal menghapus task"); }
   };
 
-  const handleToggleDone = (taskId: string) => {
-    const updated = allTasks.map((t) =>
-      t.id === taskId
-        ? { ...t, status: t.status === "DONE" ? "TODO" : "DONE" }
-        : t
-    );
-    syncToStorage(updated);
+  const handleToggleDone = async (taskId: string) => {
+    const task = allTasks.find(t => t.id === taskId);
+    if (!task) return;
+    try {
+      const newStatus = task.status === "DONE" ? "TODO" : "DONE";
+      await api.competitions.tasks.update(task.competitionId, task.id, { ...task, status: newStatus });
+      fetchTasks();
+    } catch (e) { toast.error("Gagal update status"); }
   };
 
-  const handleMoveStatus = (taskId: string, newStatus: string) => {
-    const updated = allTasks.map((t) =>
-      t.id === taskId ? { ...t, status: newStatus } : t
-    );
-    syncToStorage(updated);
-    toast.success(`Task dipindah ke ${newStatus.replace("_", " ")}`);
+  const handleMoveStatus = async (taskId: string, newStatus: string) => {
+    const task = allTasks.find(t => t.id === taskId);
+    if (!task) return;
+    try {
+      await api.competitions.tasks.update(task.competitionId, task.id, { ...task, status: newStatus });
+      fetchTasks();
+      toast.success(`Task dipindah ke ${newStatus.replace("_", " ")}`);
+    } catch (e) { toast.error("Gagal memindah task"); }
   };
 
-  if (!loaded) {
+  if (!tasksLoaded || !compsLoaded) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { usePersistedCompetitions } from "@/hooks/use-persisted-competitions";
+import { useCompetitions } from "@/hooks/use-competitions";
 import {
   getDaysRemaining,
   getDeadlineBadgeColor,
@@ -78,7 +78,7 @@ function getGreeting() {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const { competitions, loaded } = usePersistedCompetitions();
+  const { competitions, loaded } = useCompetitions();
 
   const userName = session?.user?.name?.split(" ")[0] || "Tim";
 

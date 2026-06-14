@@ -38,7 +38,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AddCompetitionDialog } from "@/components/competitions/add-competition-dialog";
-import { usePersistedCompetitions } from "@/hooks/use-persisted-competitions";
+import { useCompetitions } from "@/hooks/use-competitions";
 import {
   getStatusColor,
   getCategoryLabel,
@@ -55,7 +55,7 @@ const levels = ["ALL", "REGIONAL", "NATIONAL", "INTERNATIONAL"];
 const statuses = ["ALL", "MONITORING", "REGISTRATION", "SELECTION_PROPOSAL", "SEMIFINAL", "FINAL", "FINISHED", "WON", "ELIMINATED"];
 
 export default function CompetitionsPage() {
-  const { competitions, addCompetition, deleteCompetition, loaded } = usePersistedCompetitions();
+  const { competitions, addCompetition, deleteCompetition, loaded } = useCompetitions();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [selectedLevel, setSelectedLevel] = useState("ALL");

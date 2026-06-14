@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { usePersistedCompetitions } from "@/hooks/use-persisted-competitions";
+import { useCompetitions } from "@/hooks/use-competitions";
 import { mockUsers } from "@/lib/mock-data";
 import { getInitials, getCategoryLabel, getLevelLabel } from "@/lib/utils";
 import {
@@ -78,7 +78,7 @@ const CHART_COLORS = ["#4F46E5", "#06B6D4", "#8B5CF6", "#10B981", "#F59E0B", "#E
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
 export default function AnalyticsPage() {
-  const { competitions, loaded } = usePersistedCompetitions();
+  const { competitions, loaded } = useCompetitions();
 
   const stats = useMemo(() => {
     const total = competitions.length;

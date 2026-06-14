@@ -18,7 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { usePersistedCompetitions } from "@/hooks/use-persisted-competitions";
+import { useCompetitions } from "@/hooks/use-competitions";
 import { AddDeadlineDialog } from "@/components/deadlines/add-deadline-dialog";
 import { formatDate, getDaysRemaining } from "@/lib/utils";
 import { toast } from "sonner";
@@ -59,7 +59,7 @@ function getEventIcon(type: string) {
 }
 
 export default function CalendarPage() {
-  const { competitions, loaded } = usePersistedCompetitions();
+  const { competitions, loaded } = useCompetitions();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
@@ -144,30 +144,24 @@ export default function CalendarPage() {
 
   const selectedDayEvents = selectedDay ? getEventsForDay(selectedDay) : [];
 
-  const handleAddDeadline = (newDeadline: any) => {
+  const handleAddDeadline = async (newDeadline: any) => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const list: any[] = JSON.parse(raw);
-        const idx = list.findIndex((c: any) => c.id === newDeadline.competitionId);
-        if (idx !== -1) {
-          list[idx].deadlines = [newDeadline, ...(list[idx].deadlines || [])];
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-        }
-      }
-    } catch {}
-    const comp = competitions.find((c) => c.id === newDeadline.competitionId);
-    setEvents((prev) => [
-      ...prev,
-      {
-        ...newDeadline,
-        date: new Date(newDeadline.date),
-        competitionName: comp?.name || "Unknown",
-        type: newDeadline.type === "REGISTRATION" ? "DEADLINE" : newDeadline.type === "PROPOSAL" ? "SUBMISSION" : newDeadline.type,
-        source: "deadline",
-      },
-    ]);
-    toast.success("Event berhasil ditambahkan ke kalender!");
+      await api.competitions.deadlines.create(newDeadline.competitionId, newDeadline);
+      const comp = competitions.find((c) => c.id === newDeadline.competitionId);
+      setEvents((prev) => [
+        ...prev,
+        {
+          ...newDeadline,
+          date: new Date(newDeadline.date),
+          competitionName: comp?.name || "Unknown",
+          type: newDeadline.type === "REGISTRATION" ? "DEADLINE" : newDeadline.type === "PROPOSAL" ? "SUBMISSION" : newDeadline.type,
+          source: "deadline",
+        },
+      ]);
+      toast.success("Event berhasil ditambahkan ke kalender!");
+    } catch (error) {
+      toast.error("Gagal menambahkan event ke kalender");
+    }
   };
 
   const upcomingEvents = useMemo(() =>

@@ -32,12 +32,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { usePersistedCompetitions } from "@/hooks/use-persisted-competitions";
-import { getInitials, formatDate } from "@/lib/utils";
-import { AddDocumentDialog } from "@/components/documents/add-document-dialog";
-import { toast } from "sonner";
-
-const STORAGE_KEY = "cygnus_competitions";
+import { useCompetitions } from "@/hooks/use-competitions";
+import { api } from "@/lib/api";
 
 const documentTypes = [
   { id: "ALL", label: "Semua", icon: File },
@@ -79,39 +75,37 @@ function formatSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function persistDocuments(competitionId: string, documents: any[]) {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const list: any[] = JSON.parse(raw);
-    const idx = list.findIndex((c: any) => c.id === competitionId);
-    if (idx !== -1) list[idx].documents = documents;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  } catch {}
-}
+// Remove persistDocuments
 
 export default function DocumentsPage() {
-  const { competitions, loaded } = usePersistedCompetitions();
+  const { competitions, loaded: compsLoaded } = useCompetitions();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("ALL");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; competitionId: string; name: string } | null>(null);
 
-  // All documents from localStorage
-  const allDocs = useMemo(() => {
-    return competitions.flatMap((comp) =>
-      (comp.documents || []).map((doc: any) => ({
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [docsLoaded, setDocsLoaded] = useState(false);
+
+  const fetchDocuments = async () => {
+    try {
+      const data = await api.documents.list();
+      const formatted = data.map(doc => ({
         ...doc,
         createdAt: doc.createdAt ? new Date(doc.createdAt) : new Date(),
-        competitionName: comp.name,
-        competitionId: comp.id,
-      }))
-    ).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }, [competitions]);
+        competitionName: doc.competition?.name || "Unknown",
+        competitionId: doc.competitionId,
+      }));
+      setDocuments(formatted);
+    } catch (e) {
+      toast.error("Gagal memuat dokumen");
+    } finally {
+      setDocsLoaded(true);
+    }
+  };
 
-  const [documents, setDocuments] = useState<any[]>([]);
   useEffect(() => {
-    setDocuments(allDocs);
-  }, [allDocs]);
+    fetchDocuments();
+  }, []);
 
   const filteredDocs = useMemo(() => {
     return documents.filter((doc) => {
@@ -123,26 +117,25 @@ export default function DocumentsPage() {
     });
   }, [documents, searchQuery, selectedType]);
 
-  const handleAdd = (newDoc: any) => {
-    // Persist to localStorage
-    const comp = competitions.find((c) => c.id === newDoc.competitionId);
-    if (comp) {
-      const updated = [newDoc, ...(comp.documents || [])];
-      persistDocuments(newDoc.competitionId, updated);
+  const handleAdd = async (newDoc: any) => {
+    try {
+      await api.competitions.documents.create(newDoc.competitionId, newDoc);
+      fetchDocuments();
+      toast.success("Dokumen berhasil diupload!");
+    } catch (e) {
+      toast.error("Gagal upload dokumen");
     }
-    setDocuments((prev) => [{ ...newDoc, createdAt: new Date(newDoc.createdAt) }, ...prev]);
-    toast.success("Dokumen berhasil diupload!");
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    const comp = competitions.find((c) => c.id === deleteTarget.competitionId);
-    if (comp) {
-      const updated = (comp.documents || []).filter((d: any) => d.id !== deleteTarget.id);
-      persistDocuments(deleteTarget.competitionId, updated);
+    try {
+      await api.competitions.documents.delete(deleteTarget.competitionId, deleteTarget.id);
+      fetchDocuments();
+      toast.success("Dokumen dihapus.");
+    } catch (e) {
+      toast.error("Gagal hapus dokumen");
     }
-    setDocuments((prev) => prev.filter((d) => d.id !== deleteTarget.id));
-    toast.success("Dokumen dihapus.");
     setDeleteTarget(null);
   };
 
@@ -175,7 +168,7 @@ export default function DocumentsPage() {
     count: documents.filter((d) => d.type === type.id).length,
   }));
 
-  if (!loaded) {
+  if (!docsLoaded || !compsLoaded) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
