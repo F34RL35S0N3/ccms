@@ -40,7 +40,8 @@ import { getInitials } from "@/lib/utils";
 import { useState } from "react";
 import { User, UserRole } from "@prisma/client";
 import { toast } from "sonner";
-import { mockUsers } from "@/lib/mock-data";
+import { createUser, updateUser, deleteUser } from "@/app/actions/user";
+import { useEffect } from "react";
 
 const skillColors: Record<string, string> = {
   Frontend: "bg-blue-500/20 text-blue-400",
@@ -64,6 +65,11 @@ const roleConfig = {
 
 export default function TeamClient({ initialUsers }: { initialUsers: User[] }) {
   const [users, setUsers] = useState<User[]>(initialUsers);
+  
+  useEffect(() => {
+    setUsers(initialUsers);
+  }, [initialUsers]);
+
   const [searchQuery, setSearchQuery] = useState("");
   
   // Dialog states
@@ -128,29 +134,14 @@ export default function TeamClient({ initialUsers }: { initialUsers: User[] }) {
       skills: formData.skills.split(",").map((s) => s.trim()).filter(Boolean),
     };
     
-    // Simulate API call
-    setTimeout(() => {
-      const newUser = {
-        id: `user-${Date.now()}`,
-        name: data.name,
-        email: data.email,
-        password: data.password,
-        role: data.role,
-        nim: data.nim || null,
-        faculty: data.faculty || null,
-        skills: data.skills,
-        emailVerified: null,
-        image: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      mockUsers.unshift(newUser as any);
-      setUsers([newUser as any, ...users]);
-      setIsAddOpen(false);
+    const result = await createUser(data as any);
+    if (result.success) {
       toast.success("Akun berhasil ditambahkan!");
-      setIsSubmitting(false);
-    }, 500);
+      setIsAddOpen(false);
+    } else {
+      toast.error(result.error || "Gagal menambahkan akun");
+    }
+    setIsSubmitting(false);
   };
 
   const handleSubmitEdit = async (e: React.FormEvent) => {
@@ -163,37 +154,33 @@ export default function TeamClient({ initialUsers }: { initialUsers: User[] }) {
       skills: formData.skills.split(",").map((s) => s.trim()).filter(Boolean),
     };
     
-    // Simulate API call
-    setTimeout(() => {
-      const updatedUser = {
-        ...selectedUser,
-        ...data,
-      };
-      
-      const userIndex = mockUsers.findIndex(u => u.id === selectedUser.id);
-      if (userIndex !== -1) mockUsers[userIndex] = updatedUser as any;
-      
-      setUsers(users.map((u) => (u.id === selectedUser.id ? (updatedUser as any) : u)));
-      setIsEditOpen(false);
+    // Remove empty password so it doesn't overwrite with empty string
+    if (!data.password) {
+      delete (data as any).password;
+    }
+
+    const result = await updateUser(selectedUser.id, data as any);
+    if (result.success) {
       toast.success("Akun berhasil diperbarui!");
-      setIsSubmitting(false);
-    }, 500);
+      setIsEditOpen(false);
+    } else {
+      toast.error(result.error || "Gagal memperbarui akun");
+    }
+    setIsSubmitting(false);
   };
 
   const handleDelete = async () => {
     if (!selectedUser) return;
     setIsSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      const userIndex = mockUsers.findIndex(u => u.id === selectedUser.id);
-      if (userIndex !== -1) mockUsers.splice(userIndex, 1);
-      
-      setUsers(users.filter((u) => u.id !== selectedUser.id));
-      setIsDeleteOpen(false);
+    const result = await deleteUser(selectedUser.id);
+    if (result.success) {
       toast.success("Akun berhasil dihapus!");
-      setIsSubmitting(false);
-    }, 500);
+      setIsDeleteOpen(false);
+    } else {
+      toast.error(result.error || "Gagal menghapus akun");
+    }
+    setIsSubmitting(false);
   };
 
   return (
